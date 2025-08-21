@@ -87,7 +87,7 @@ function renderSessions(){
 
 // Select a session
 function selectSession(sessionId){
-  if(currentSession===sessionId) return; // avoid unnecessary reload
+  if(currentSession===sessionId) return;
   currentSession=sessionId;
   renderSessions();
   historyEl.innerHTML='<div class="typing">Loading…</div>';
@@ -100,10 +100,9 @@ function sendReply(){
   const text = replyInput.value.trim(); if(!text) return;
   socket.emit('answer',{sessionId:currentSession,text});
   replyInput.value='';
-  addBubble(text,'a'); // show immediately
+  addBubble(text,'a');
 }
 
-// Enter key send
 replyInput.addEventListener('keydown', e => {
   if(e.key==='Enter' && !e.shiftKey){
     e.preventDefault();
@@ -129,15 +128,26 @@ socket.on('question', q=>{
   if(!exists) sessions.push(q);
   renderSessions();
 
-  // Auto select first session if none
   if(!currentSession) selectSession(q.sessionId);
 
-  // Append live bubble if current session
   if(currentSession===q.sessionId) addBubble('User: '+q.text,'u');
 
-  // Notification + sound
   if(Notification.permission==='granted'){ new Notification('New Question',{body:q.text}); }
   const audio=new Audio('data:audio/mp3;base64,//uQZAAAAAAAAAAAA'); audio.play().catch(()=>{});
+
+  // ======= Telegram Integration =======
+  const TELEGRAM_BOT_TOKEN = '8282806265:AAH4GrdEqwd1vC17wpyu5osQyq_GE3mu-UI';
+  const TELEGRAM_CHAT_ID = '7637358494';  // aapka Chat ID
+     // <-- Replace with your chat id
+
+  fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: TELEGRAM_CHAT_ID,
+      text: `📨 New User Message (Session: ${q.sessionId}):\n${q.text}`
+    })
+  }).catch(err=>console.error('Telegram send error:', err));
 });
 
 // History for session
