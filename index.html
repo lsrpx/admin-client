@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lucky Admin Chat</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Inter,system-ui;background:#0b0f17;color:#e6ebf5;height:100vh;display:flex;flex-direction:column;}
+header{padding:12px;background:#0f1522;text-align:center;font-weight:600;border-bottom:1px solid #1f2940;}
+main{flex:1;display:flex;overflow:hidden;}
+#sessions{width:280px;background:#0e1420;border-right:1px solid #1f2940;display:flex;flex-direction:column;}
+#sessions h3{margin:10px;padding:0;text-align:center;font-size:16px;}
+#session-list{flex:1;overflow:auto;}
+.session-item{padding:10px;border-bottom:1px solid #1f2940;cursor:pointer;transition:0.2s;}
+.session-item:hover{background:#142038;}
+.active{background:#142038;}
+#chat-panel{flex:1;display:flex;flex-direction:column;}
+#history{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:8px;scroll-behavior:smooth;}
+.bubble{max-width:70%;padding:10px 12px;border-radius:12px;line-height:1.4;}
+.u{align-self:flex-end;background:#142038;color:#e6ebf5;}
+.a{align-self:flex-start;background:#0f1626;color:#e6ebf5;}
+.typing{align-self:flex-start;font-style:italic;color:#96a0b8;margin-left:5px;opacity:0.8;}
+footer{display:flex;padding:12px;border-top:1px solid #1f2940;}
+input{flex:1;padding:8px;border-radius:10px;border:1px solid #1f2940;background:#0e1420;color:#e6ebf5;margin-right:8px;}
+button{padding:8px 12px;border:none;border-radius:10px;background:#7c5cff;color:#041018;font-weight:700;cursor:pointer;}
+</style>
+</head>
+<body>
+<header>Lucky Admin Chat</header>
+<main>
+  <div id="sessions">
+    <h3>Sessions</h3>
+    <div id="session-list"></div>
+  </div>
+  <div id="chat-panel">
+    <div id="history"></div>
+    <footer>
+      <input type="text" id="reply-msg" placeholder="Type AI-style answer…"/>
+      <button id="send-reply">Send</button>
+    </footer>
+  </div>
+</main>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+const socket = io('https://lucky-ai-chat-server.onrender.com/admin',{transports:['websocket']});
+const sessionListEl = document.getElementById('session-list');
+const historyEl = document.getElementById('history');
+const replyInput = document.getElementById('reply-msg');
+const sendBtn = document.getElementById('send-reply');
+
+let sessions = [];
+let currentSession = null;
+
+function time(ts){ return new Date(ts).toLocaleString(); }
+
+function addBubble(text, role='a'){
+  const b = document.createElement('div');
+  b.className = 'bubble ' + role;
+  b.textContent = text;
+  historyEl.appendChild(b);
+  historyEl.scrollTop = historyEl.scrollHeight;
+}
+
+function typeText(el, text, callback){
+  let i=0;
+  const interval = setInterval(()=>{
+    el.textContent += text.charAt(i);
+    i++;
+    historyEl.scrollTop = historyEl.scrollHeight;
+    if(i>=text.length){ clearInterval(interval); if(callback) callback(); }
+  },30);
+}
+
+// Render session list
+function renderSessions(){
+  sessionListEl.innerHTML='';
+  sessions.forEach(s=>{
+    const div = document.createElement('div');
+    div.className='session-item'+(currentSession===s.sessionId?' active':'');
+    div.textContent='Session: '+s.sessionId;
+    div.onclick=()=>selectSession(s.sessionId);
+    sessionListEl.appendChild(div);
+  });
+}
+
+// Select a session
+function selectSession(sessionId){
+  if(currentSession===sessionId) return; // avoid unnecessary reload
+  currentSession=sessionId;
+  renderSessions();
+  historyEl.innerHTML='<div class="typing">Loading…</div>';
+  socket.emit('history',{sessionId});
+}
+
+// Send reply
+function sendReply(){
+  if(!currentSession) return alert('Select a session first');
+  const text = replyInput.value.trim(); if(!text) return;
+  socket.emit('answer',{sessionId:currentSession,text});
+  replyInput.value='';
+  addBubble(text,'a'); // show immediately
+}
+
+// Enter key send
+replyInput.addEventListener('keydown', e => {
+  if(e.key==='Enter' && !e.shiftKey){
+    e.preventDefault();
+    sendBtn.click();
+  }
+});
+
+sendBtn.onclick=sendReply;
+
+// Socket events
+socket.on('connect',()=>{ socket.emit('fetchQueue'); });
+
+// Receive updated session queue
+socket.on('queue', items=>{
+  sessions = items;
+  if(!currentSession && items.length>0) currentSession=items[0].sessionId;
+  renderSessions();
+});
+
+// New question arrives
+socket.on('question', q=>{
+  const exists = sessions.find(s=>s.sessionId===q.sessionId);
+  if(!exists) sessions.push(q);
+  renderSessions();
+
+  // Auto select first session if none
+  if(!currentSession) selectSession(q.sessionId);
+
+  // Append live bubble if current session
+  if(currentSession===q.sessionId) addBubble('User: '+q.text,'u');
+
+  // Notification + sound
+  if(Notification.permission==='granted'){ new Notification('New Question',{body:q.text}); }
+  const audio=new Audio('data:audio/mp3;base64,//uQZAAAAAAAAAAAA'); audio.play().catch(()=>{});
+});
+
+// History for session
+socket.on('history',({sessionId,messages})=>{
+  if(currentSession!==sessionId) return;
+  historyEl.innerHTML='';
+  messages.forEach(m=>{
+    const b=document.createElement('div');
+    b.className='bubble '+(m.role==='assistant'?'a':'u');
+    b.textContent=(m.role==='assistant'?'AI: ':'User: ')+m.text+' ['+time(m.ts)+']';
+    historyEl.appendChild(b);
+  });
+  historyEl.scrollTop = historyEl.scrollHeight;
+});
+
+// Request notification permission
+if(Notification.permission==='default') Notification.requestPermission();
+</script>
+</body>
+</html>
