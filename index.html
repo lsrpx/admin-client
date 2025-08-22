@@ -36,7 +36,7 @@ button{padding:8px 12px;border:none;border-radius:10px;background:#7c5cff;color:
   <div id="chat-panel">
     <div id="history"></div>
     <footer>
-      <input type="text" id="reply-msg" placeholder="Type AI-style answer…"/>
+      <input type="text" id="reply-msg" placeholder="Type Lucky-style answer…"/>
       <button id="send-reply">Send</button>
     </footer>
   </div>
@@ -100,7 +100,7 @@ function sendReply(){
   const text = replyInput.value.trim(); if(!text) return;
   socket.emit('answer',{sessionId:currentSession,text});
   replyInput.value='';
-  addBubble(text,'a');
+  addBubble("Lucky: " + text,'a');
 }
 
 replyInput.addEventListener('keydown', e => {
@@ -136,9 +136,8 @@ socket.on('question', q=>{
   const audio=new Audio('data:audio/mp3;base64,//uQZAAAAAAAAAAAA'); audio.play().catch(()=>{});
 
   // ======= Telegram Integration =======
-  const TELEGRAM_BOT_TOKEN = '8282806265:AAH4GrdEqwd1vC17wpyu5osQyq_GE3mu-UI';
-  const TELEGRAM_CHAT_ID = '7637358494';  // aapka Chat ID
-     // <-- Replace with your chat id
+  const TELEGRAM_BOT_TOKEN = 'YOUR_BOT_TOKEN';
+  const TELEGRAM_CHAT_ID = 'YOUR_CHAT_ID';
 
   fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: 'POST',
@@ -157,7 +156,7 @@ socket.on('history',({sessionId,messages})=>{
   messages.forEach(m=>{
     const b=document.createElement('div');
     b.className='bubble '+(m.role==='assistant'?'a':'u');
-    b.textContent=(m.role==='assistant'?'AI: ':'User: ')+m.text+' ['+time(m.ts)+']';
+    b.textContent=(m.role==='assistant'?'Lucky: ':'User: ')+m.text+' ['+time(m.ts)+']';
     historyEl.appendChild(b);
   });
   historyEl.scrollTop = historyEl.scrollHeight;
